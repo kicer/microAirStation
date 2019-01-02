@@ -41,6 +41,8 @@
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
 extern void _sys_ticks_cb(void);
+extern int uart1_tx_data(void);
+extern void uart1_rx_cb(uint8_t);
 /* Public functions ----------------------------------------------------------*/
 
 #ifdef _COSMIC_
@@ -331,9 +333,12 @@ INTERRUPT_HANDLER(TIM1_CAP_COM_IRQHandler, 12)
   */
  INTERRUPT_HANDLER(UART1_TX_IRQHandler, 17)
  {
-    /* In order to detect unexpected events during development,
-       it is recommended to set a breakpoint on the following instruction.
-    */
+    int ch = uart1_tx_data();
+    if(ch != -1) {
+        UART1_SendData8((uint8_t)ch);
+    } else {
+        UART1_ITConfig(UART1_IT_TXE, DISABLE);
+    }
  }
 
 /**
@@ -343,9 +348,9 @@ INTERRUPT_HANDLER(TIM1_CAP_COM_IRQHandler, 12)
   */
  INTERRUPT_HANDLER(UART1_RX_IRQHandler, 18)
  {
-    /* In order to detect unexpected events during development,
-       it is recommended to set a breakpoint on the following instruction.
-    */
+    if( UART1_GetITStatus(UART1_IT_RXNE) == SET) {
+        uart1_rx_cb(UART1_ReceiveData8());
+    }
  }
 #endif /* (STM8S208) || (STM8S207) || (STM8S103) || (STM8S001) || (STM8S903) || (STM8AF62Ax) || (STM8AF52Ax) */
 
@@ -487,9 +492,6 @@ INTERRUPT_HANDLER(TIM6_UPD_OVF_TRG_IRQHandler, 23)
   */
  INTERRUPT_HANDLER(TIM4_UPD_OVF_IRQHandler, 23)
  {
-  /* In order to detect unexpected events during development,
-     it is recommended to set a breakpoint on the following instruction.
-  */
   _sys_ticks_cb();
   /* Cleat Interrupt Pending bit */
   TIM4_ClearITPendingBit(TIM4_IT_UPDATE);

@@ -20,13 +20,11 @@ TaskStack _sys_task[TASK_STACK_SIZE];
 __IO clock_t _sys_ticks = 0;
 __IO clock_t _sys_event = 0;
 
-static void CLK_Config(void);
 static void TIM4_Config(void);
 static int Task_Register(int,int,Task,void*);
 static int isEventSet(int evt);
 
 int sys_init(void) {
-    CLK_Config();
     TIM4_Config();
     for(int i=0; i<TASK_STACK_SIZE; i++) {
         sys_task_destory(i);
@@ -136,18 +134,6 @@ static int Task_Register(int type, int argv, Task foo, void *params) {
 }
 
 /**
-  * @brief  Configure system clock to run at 16Mhz
-  * @param  None
-  * @retval None
-  */
-static void CLK_Config(void)
-{
-    /* Initialization of the clock */
-    /* Clock divider to HSI/1 */
-    CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
-}
-
-/**
   * @brief  Configure TIM4 to generate an update interrupt each 1ms
   * @param  None
   * @retval None
@@ -169,9 +155,6 @@ static void TIM4_Config(void)
   TIM4_ClearFlag(TIM4_FLAG_UPDATE);
   /* Enable update interrupt */
   TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE);
-
-  /* enable interrupts */
-  enableInterrupts();
 
   /* Enable TIM4 */
   TIM4_Cmd(ENABLE);
