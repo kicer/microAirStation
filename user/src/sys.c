@@ -5,20 +5,20 @@ typedef enum {
     TASK_NONE=0,
     TASK_ALARM,
     TASK_TIMER,
-    TASK_SIGNAL,
+    TASK_EVENT,
 } _TaskType;
 
 typedef struct {
     Task foo;
     void *params;
     int type;
-    int argv;
-    int ticks;
+    clock_t argv;
+    clock_t ticks;
 } TaskStack;
 
 TaskStack _sys_task[TASK_STACK_SIZE];
-__IO uint32_t _sys_ticks = 0;
-__IO uint32_t _sys_event = 0;
+__IO clock_t _sys_ticks = 0;
+__IO clock_t _sys_event = 0;
 
 static void CLK_Config(void);
 static void TIM4_Config(void);
@@ -34,16 +34,16 @@ int sys_init(void) {
     return 0;
 }
 
-int sys_task_reg_timer(int ms, Task foo, void *params) {
+int sys_task_reg_timer(clock_t ms, Task foo, void *params) {
     return Task_Register(TASK_TIMER, ms, foo, params);
 }
 
-int sys_task_reg_alarm(int ms, Task foo, void *params) {
+int sys_task_reg_alarm(clock_t ms, Task foo, void *params) {
     return Task_Register(TASK_ALARM, ms, foo, params);
 }
 
-int sys_task_reg_signal(int signal, Task foo, void *params) {
-    return Task_Register(TASK_SIGNAL, signal, foo, params);
+int sys_task_reg_event(int evt, Task foo, void *params) {
+    return Task_Register(TASK_EVENT, evt, foo, params);
 }
 
 int sys_task_destory(int task_id) {
@@ -85,7 +85,7 @@ void sys_run(void) {
                     }
                 }
                 break;
-            case TASK_SIGNAL:
+            case TASK_EVENT:
                 if(isEventSet(_sys_task[i].argv)) {
                     _sys_task[i].foo(_sys_task[i].params);
                     sys_event_clear(_sys_task[i].argv);
@@ -97,16 +97,16 @@ void sys_run(void) {
 }
 
 int sys_event_trigger(int evt) {
-    _sys_event |= (uint32_t)(1<<evt);
+    _sys_event |= (clock_t)(1<<evt);
     return 0;
 }
 
 int sys_event_clear(int evt) {
-    _sys_event &= ~((uint32_t)(1<<evt));
+    _sys_event &= ~((clock_t)(1<<evt));
     return 0;
 }
 
-uint32_t sys_uptime(void) {
+clock_t sys_uptime(void) {
     return _sys_ticks;
 }
 
@@ -118,7 +118,7 @@ void _sys_ticks_cb(void) {
 }
 
 static int isEventSet(int evt) {
-    return ((_sys_event&((uint32_t)(1<<evt)))!=0);
+    return ((_sys_event&((clock_t)(1<<evt)))!=0);
 }
 
 static int Task_Register(int type, int argv, Task foo, void *params) {
