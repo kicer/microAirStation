@@ -2153,5 +2153,11 @@
         <file>
             <name>$PROJ_DIR$\user\src\main.c</name>
         </file>
+        <file>
+            <name>$PROJ_DIR$\user\src\stm8s_it.c</name>
+        </file>
+        <file>
+            <name>$PROJ_DIR$\user\src\sys.c</name>
+        </file>
     </group>
 </project>
