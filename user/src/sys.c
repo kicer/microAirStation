@@ -21,7 +21,7 @@ __IO clock_t _sys_ticks = 0;
 __IO clock_t _sys_event = 0;
 
 static void TIM4_Config(void);
-static int Task_Register(int,clock_t,Task,void*);
+static int Task_Register(int,clock_t,Task);
 static int isEventSet(int evt);
 
 int sys_init(void) {
@@ -32,23 +32,22 @@ int sys_init(void) {
     return 0;
 }
 
-int sys_task_reg_timer(clock_t ms, Task foo, void *params) {
-    return Task_Register(TASK_TIMER, ms, foo, params);
+int sys_task_reg_timer(clock_t ms, Task foo) {
+    return Task_Register(TASK_TIMER, ms, foo);
 }
 
-int sys_task_reg_alarm(clock_t ms, Task foo, void *params) {
-    return Task_Register(TASK_ALARM, ms, foo, params);
+int sys_task_reg_alarm(clock_t ms, Task foo) {
+    return Task_Register(TASK_ALARM, ms, foo);
 }
 
-int sys_task_reg_event(int evt, Task foo, void *params) {
-    return Task_Register(TASK_EVENT, evt, foo, params);
+int sys_task_reg_event(int evt, Task foo) {
+    return Task_Register(TASK_EVENT, evt, foo);
 }
 
 int sys_task_destory(int task_id) {
     if(task_id <0) return -1;
     if(task_id >= TASK_STACK_SIZE) return -1;
     _sys_task[task_id].foo = 0;
-    _sys_task[task_id].params = 0;
     _sys_task[task_id].argv = 0;
     _sys_task[task_id].ticks = 0;
     _sys_task[task_id].type = TASK_NONE;
@@ -69,7 +68,7 @@ void sys_run(void) {
                 if(evt_systicks) {
                     _sys_task[i].ticks -= 1;
                     if(_sys_task[i].ticks == 0) {
-                        _sys_task[i].foo(_sys_task[i].params);
+                        _sys_task[i].foo();
                         sys_task_destory(i);
                     }
                 }
@@ -78,14 +77,14 @@ void sys_run(void) {
                 if(evt_systicks) {
                     _sys_task[i].ticks -= 1;
                     if(_sys_task[i].ticks == 0) {
-                        _sys_task[i].foo(_sys_task[i].params);
+                        _sys_task[i].foo();
                         _sys_task[i].ticks = _sys_task[i].argv;
                     }
                 }
                 break;
             case TASK_EVENT:
                 if(isEventSet(_sys_task[i].argv)) {
-                    _sys_task[i].foo(_sys_task[i].params);
+                    _sys_task[i].foo();
                     sys_event_clear(_sys_task[i].argv);
                 }
                 break;
@@ -119,11 +118,10 @@ static int isEventSet(int evt) {
     return ((_sys_event&((clock_t)(1<<evt)))!=0);
 }
 
-static int Task_Register(int type, clock_t argv, Task foo, void *params) {
+static int Task_Register(int type, clock_t argv, Task foo) {
     for(int i=0; i<TASK_STACK_SIZE; i++) {
         if(_sys_task[i].type == TASK_NONE) {
             _sys_task[i].foo = foo;
-            _sys_task[i].params = params;
             _sys_task[i].argv = argv;
             _sys_task[i].ticks = argv;
             _sys_task[i].type = type;

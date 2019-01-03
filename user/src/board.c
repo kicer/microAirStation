@@ -45,26 +45,26 @@ static void config_read_state(DevState *pst) {
     }
 }
 
-static void config_update_config(void *p) {
+static void config_update_config(void) {
     gDevSt.chksum = config_make_checksum(&gDevSt, sizeof(DevState));
     eeprom_write_config(&gDevSt, sizeof(DevState));
 }
 
-static void config_update_powerCnt(void *p) {
+static void config_update_powerCnt(void) {
     gDevSt.powerCnt += 1;
-    config_update_config(0);
+    config_update_config();
 }
 
-static void config_update_actionCnt(void *p) {
+static void config_update_actionCnt(void) {
     gDevSt.actionCnt += 1;
-    config_update_config(0);
+    config_update_config();
 }
 
-static void action_led_off(void *p) {
+static void action_led_off(void) {
     LED_OFF();
 }
 
-static void user_key_cb(void *p) {
+static void user_key_cb(void) {
     static uint32_t key_pressed = 0;
     if(GPIO_ReadInputPin(GPIOC, GPIO_PIN_5)==RESET) {
         key_pressed += 1;
@@ -76,8 +76,8 @@ static void user_key_cb(void *p) {
             LED_ON();
             gDevSt.actionCnt = 0;
             gDevSt.clearCnt += 1;
-            config_update_config(0);
-            sys_task_reg_alarm(5000, action_led_off, 0);
+            config_update_config();
+            sys_task_reg_alarm(5000, action_led_off);
         }
         key_pressed = 0;
     }
@@ -90,23 +90,23 @@ static void bmq_data_clear(void) {
     bmqCh1 = bmqCh2 = bmqCh3 = bmqCh4 = 0;
 }
 
-static void action_step_reinit(void *p) {
+static void action_step_reinit(void) {
     actionState = 0;
 }
 
-static void action_step_finish(void *p) {
+static void action_step_finish(void) {
     actionState = 4;
     /* stop tuigan */
     GPIO_WriteLow(GPIOC, GPIO_PIN_3);
     GPIO_WriteLow(GPIOC, GPIO_PIN_4);
     /* update state */
-    config_update_actionCnt(0);
+    config_update_actionCnt();
     /* reinit after xxs */
-    sys_task_reg_alarm((clock_t)gDevSt.actionLockTime*1000, action_step_reinit, 0);
+    sys_task_reg_alarm((clock_t)gDevSt.actionLockTime*1000, action_step_reinit);
     actionState = 5;
 }
 
-static void action_step_stop(void *p) {
+static void action_step_stop(void) {
     actionState = 3;
     /* stop motor */
     GPIO_WriteLow(GPIOB, GPIO_PIN_4);
@@ -114,10 +114,10 @@ static void action_step_stop(void *p) {
     /* down tuigan */
     GPIO_WriteLow(GPIOC, GPIO_PIN_3);
     GPIO_WriteHigh(GPIOC, GPIO_PIN_4);
-    sys_task_reg_alarm((clock_t)gDevSt.tuiganRunTime*1000, action_step_finish, 0);
+    sys_task_reg_alarm((clock_t)gDevSt.tuiganRunTime*1000, action_step_finish);
 }
 
-static void action_step_move(void *p) {
+static void action_step_move(void) {
     actionState = 2;
     /* stop tuigan */
     GPIO_WriteLow(GPIOC, GPIO_PIN_4);
@@ -130,15 +130,15 @@ static void action_step_move(void *p) {
     GPIO_WriteHigh(GPIOD, GPIO_PIN_3);
 }
 
-static void action_step_up(void *p) {
+static void action_step_up(void) {
     actionState = 1;
     /* up tuigan */
     GPIO_WriteLow(GPIOC, GPIO_PIN_4);
     GPIO_WriteHigh(GPIOC, GPIO_PIN_3);
-    sys_task_reg_alarm((clock_t)gDevSt.tuiganRunTime*1000, action_step_move, 0);
+    sys_task_reg_alarm((clock_t)gDevSt.tuiganRunTime*1000, action_step_move);
 }
 
-static void uart_recv_pkg_cb(void *p) {
+static void uart_recv_pkg_cb(void) {
     int cmd = Rx1Buffer[1];
     int size = Rx1Buffer[2];
     if(cmd == 0x01) { /* readState */
@@ -147,7 +147,7 @@ static void uart_recv_pkg_cb(void *p) {
             gDevSt.actionLockTime = Rx1Buffer[4];
             gDevSt.bmqRunCircle = Rx1Buffer[5];
             gDevSt.bmqRunAngle = Rx1Buffer[6];
-            sys_task_reg_alarm(1000, config_update_config, 0);
+            sys_task_reg_alarm(1000, config_update_config);
         }
         uart1_flush_output(); /* force output */
         uart1_send((uint8_t *)&gDevSt, sizeof(gDevSt));
@@ -155,7 +155,7 @@ static void uart_recv_pkg_cb(void *p) {
     } else if(cmd == 0x02) { /* filterUpdate */
         if(actionState == 0) {
             /* up > move > check > stop > down */
-            action_step_up(0);
+            action_step_up();
         }
         /* ack state */
         ActionState st= {0x55,0x02,2,0,0,0xAA};
@@ -188,11 +188,11 @@ int board_init(void) {
     eeprom_init();
     config_read_state(&gDevSt);
     /* register event */
-    sys_task_reg_timer(10, user_key_cb, 0);
-    sys_task_reg_event(EVENT_RECV_PKG, uart_recv_pkg_cb, 0);
-    sys_task_reg_event(EVENT_SEND_PKG, action_led_off, 0);
-    sys_task_reg_alarm(60000, config_update_powerCnt, 0);    /* 1min */
-    sys_task_reg_event(EVENT_BMQ_STOP, action_step_stop, 0);
+    sys_task_reg_timer(10, user_key_cb);
+    sys_task_reg_event(EVENT_RECV_PKG, uart_recv_pkg_cb);
+    sys_task_reg_event(EVENT_SEND_PKG, action_led_off);
+    sys_task_reg_alarm(60000, config_update_powerCnt);    /* 1min */
+    sys_task_reg_event(EVENT_BMQ_STOP, action_step_stop);
     return 0;
 }
 

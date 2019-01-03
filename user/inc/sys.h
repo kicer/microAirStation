@@ -8,11 +8,11 @@
 extern int sys_init(void);
 
 typedef unsigned long clock_t;
-typedef void (*Task)(void *params);
+typedef void (*Task)(void);
 
-extern int sys_task_reg_timer(clock_t ms, Task foo, void *params);
-extern int sys_task_reg_alarm(clock_t ms, Task foo, void *params);
-extern int sys_task_reg_event(int evt, Task foo, void *params);
+extern int sys_task_reg_timer(clock_t ms, Task foo);
+extern int sys_task_reg_alarm(clock_t ms, Task foo);
+extern int sys_task_reg_event(int evt, Task foo);
 extern int sys_task_destory(int task_id);
 
 /* system event functions
