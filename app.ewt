@@ -2154,6 +2154,9 @@
             <name>$PROJ_DIR$\user\src\board.c</name>
         </file>
         <file>
+            <name>$PROJ_DIR$\user\src\eeprom.c</name>
+        </file>
+        <file>
             <name>$PROJ_DIR$\user\src\main.c</name>
         </file>
         <file>

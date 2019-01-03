@@ -5,7 +5,7 @@
 #define UART_TX_MAXSIZE    128
 #define UART_RX_MAXSIZE    128
 
-extern int uart1_config(unsigned long baud);
+extern int uart1_init(unsigned long baud);
 extern int uart1_send(uint8_t *buffer, int size);
 extern int uart1_flush_output(void);
 

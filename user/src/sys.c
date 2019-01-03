@@ -21,7 +21,7 @@ __IO clock_t _sys_ticks = 0;
 __IO clock_t _sys_event = 0;
 
 static void TIM4_Config(void);
-static int Task_Register(int,int,Task,void*);
+static int Task_Register(int,clock_t,Task,void*);
 static int isEventSet(int evt);
 
 int sys_init(void) {
@@ -119,7 +119,7 @@ static int isEventSet(int evt) {
     return ((_sys_event&((clock_t)(1<<evt)))!=0);
 }
 
-static int Task_Register(int type, int argv, Task foo, void *params) {
+static int Task_Register(int type, clock_t argv, Task foo, void *params) {
     for(int i=0; i<TASK_STACK_SIZE; i++) {
         if(_sys_task[i].type == TASK_NONE) {
             _sys_task[i].foo = foo;

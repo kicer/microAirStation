@@ -1,7 +1,7 @@
 #include "stm8s.h"
 #include "uart.h"
 
-int uart1_config(unsigned long baud) {
+int uart1_init(unsigned long baud) {
     UART1_DeInit();
     /* Configure the UART1 */
     UART1_Init((uint32_t)baud, UART1_WORDLENGTH_8D, UART1_STOPBITS_1, UART1_PARITY_NO,

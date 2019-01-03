@@ -1,15 +1,62 @@
 #include "stm8s.h"
 #include "sys.h"
 #include "uart.h"
+#include "eeprom.h"
 #include "board.h"
 
 uint8_t Rx1Buffer[UART_RX_MAXSIZE];
+
+static void config_make_checksum(DevState *pst) {
+    pst->chksum = 0;
+    uint8_t chksum = 0;
+    for(int i=0; i<sizeof(DevState); i++) {
+        chksum += *((uint8_t*)pst+i);
+    }
+    pst->chksum = 0xFF-chksum;
+}
+
+static void config_read_state(DevState *pst) {
+    if(eeprom_read_config(pst) != sizeof(DevState)) {
+        pst->head = 0x55;
+        pst->cmd = 0x01;
+        pst->len = 4;
+        pst->powerCnt = 0;
+        pst->actionCnt = 0;
+        pst->clearCnt = 0;
+        pst->tail = 0xAA;
+        config_make_checksum(pst);
+    }
+}
+
+static void config_update_powerCnt(void *p) {
+    DevState st;
+    config_read_state(&st);
+    st.powerCnt += 1;
+    config_make_checksum(&st);
+    eeprom_write_config(&st, sizeof(st));
+}
+
+static void config_update_actionCnt(void *p) {
+    DevState st;
+    config_read_state(&st);
+    st.actionCnt += 1;
+    config_make_checksum(&st);
+    eeprom_write_config(&st, sizeof(st));
+}
+
+static void config_update_clearCnt(void *p) {
+    DevState st;
+    config_read_state(&st);
+    st.clearCnt += 1;
+    config_make_checksum(&st);
+    eeprom_write_config(&st, sizeof(st));
+}
 
 static void uart_pkgs_cb(void *p) {
     int cmd = *((uint8_t *)p+1);
     if(cmd == 0x01) { /* readState */
         DevState st;
-        /* todo: build st */
+        config_read_state(&st);
         uart1_flush_output(); /* force output */
         uart1_send((uint8_t *)&st, sizeof(st));
     } else if(cmd == 0x02) { /* filterUpdate */
@@ -23,6 +70,7 @@ static void uart_pkgs_cb(void *p) {
 
 int board_init(void) {
     sys_task_reg_event(EVENT_UART1_PKGS, uart_pkgs_cb, Rx1Buffer);
+    sys_task_reg_alarm(60000, config_update_powerCnt, 0);
     return 0;
 }
 
