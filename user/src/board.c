@@ -8,6 +8,10 @@ uint8_t Rx1Buffer[UART_RX_MAXSIZE];
 DevState gDevSt;
 __IO uint8_t actionState = 0;
 
+#define LED_ON()   GPIO_WriteHigh(GPIOA, GPIO_PIN_3)
+#define LED_OFF()  GPIO_WriteLow(GPIOA, GPIO_PIN_3)
+
+
 static uint8_t config_make_checksum(void *pkg, int size) {
     uint8_t chksum = 0;
     uint8_t *pst = (uint8_t *)pkg;
@@ -41,22 +45,42 @@ static void config_read_state(DevState *pst) {
     }
 }
 
-static void config_update_powerCnt(void *p) {
-    gDevSt.powerCnt += 1;
+static void config_update_config(void *p) {
     gDevSt.chksum = config_make_checksum(&gDevSt, sizeof(DevState));
     eeprom_write_config(&gDevSt, sizeof(DevState));
+}
+
+static void config_update_powerCnt(void *p) {
+    gDevSt.powerCnt += 1;
+    config_update_config(0);
 }
 
 static void config_update_actionCnt(void *p) {
     gDevSt.actionCnt += 1;
-    gDevSt.chksum = config_make_checksum(&gDevSt, sizeof(DevState));
-    eeprom_write_config(&gDevSt, sizeof(DevState));
+    config_update_config(0);
 }
 
-static void config_update_clearCnt(void *p) {
-    gDevSt.clearCnt += 1;
-    gDevSt.chksum = config_make_checksum(&gDevSt, sizeof(DevState));
-    eeprom_write_config(&gDevSt, sizeof(DevState));
+static void action_led_off(void *p) {
+    LED_OFF();
+}
+
+static void user_key_cb(void *p) {
+    static uint32_t key_pressed = 0;
+    if(GPIO_ReadInputPin(GPIOC, GPIO_PIN_5)==RESET) {
+        key_pressed += 1;
+        if(key_pressed > 250) { /* >2.5s */
+          LED_ON();
+        }
+    } else {
+        if(key_pressed > 250) { /* >2.5s */
+            LED_ON();
+            gDevSt.actionCnt = 0;
+            gDevSt.clearCnt += 1;
+            config_update_config(0);
+            sys_task_reg_alarm(5000, action_led_off, 0);
+        }
+        key_pressed = 0;
+    }
 }
 
 __IO uint32_t bmqCh1,bmqCh2,bmqCh3,bmqCh4;
@@ -114,11 +138,20 @@ static void action_step_up(void *p) {
     sys_task_reg_alarm((clock_t)gDevSt.tuiganRunTime*1000, action_step_move, 0);
 }
 
-static void uart_pkgs_cb(void *p) {
-    int cmd = *((uint8_t *)p+1);
+static void uart_recv_pkg_cb(void *p) {
+    int cmd = Rx1Buffer[1];
+    int size = Rx1Buffer[2];
     if(cmd == 0x01) { /* readState */
+        if(size == 5) {
+            gDevSt.tuiganRunTime = Rx1Buffer[3];
+            gDevSt.actionLockTime = Rx1Buffer[4];
+            gDevSt.bmqRunCircle = Rx1Buffer[5];
+            gDevSt.bmqRunAngle = Rx1Buffer[6];
+            sys_task_reg_alarm(1000, config_update_config, 0);
+        }
         uart1_flush_output(); /* force output */
         uart1_send((uint8_t *)&gDevSt, sizeof(gDevSt));
+        LED_ON();
     } else if(cmd == 0x02) { /* filterUpdate */
         if(actionState == 0) {
             /* up > move > check > stop > down */
@@ -130,10 +163,16 @@ static void uart_pkgs_cb(void *p) {
         st.chksum = config_make_checksum(&st, sizeof(ActionState));
         uart1_flush_output(); /* force output */
         uart1_send((uint8_t *)&st, sizeof(st));
+        LED_ON();
     }
 }
 
 int board_init(void) {
+    uart1_init(UART_COMM_BAUD);
+    /* indicate led */
+    GPIO_Init(GPIOA, GPIO_PIN_3, GPIO_MODE_OUT_PP_LOW_FAST);
+    /* reset key */
+    GPIO_Init(GPIOC, GPIO_PIN_5, GPIO_MODE_IN_PU_NO_IT);
     /* 4ch motor output */
     GPIO_Init(GPIOD, GPIO_PIN_3, GPIO_MODE_OUT_PP_LOW_FAST);
     GPIO_Init(GPIOB, GPIO_PIN_4, GPIO_MODE_OUT_OD_LOW_FAST);
@@ -145,13 +184,15 @@ int board_init(void) {
     GPIO_Init(GPIOD, GPIO_PIN_2, GPIO_MODE_IN_PU_IT);
     EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOD, EXTI_SENSITIVITY_FALL_ONLY);
     EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOC, EXTI_SENSITIVITY_FALL_ONLY);
-    /* register event */
-    sys_task_reg_event(EVENT_UART1_PKGS, uart_pkgs_cb, Rx1Buffer);
-    sys_task_reg_alarm(60000, config_update_powerCnt, 0);
-    sys_task_reg_event(EVENT_BMQ_STOP, action_step_stop, 0);
     /* read config */
     eeprom_init();
     config_read_state(&gDevSt);
+    /* register event */
+    sys_task_reg_timer(10, user_key_cb, 0);
+    sys_task_reg_event(EVENT_RECV_PKG, uart_recv_pkg_cb, 0);
+    sys_task_reg_event(EVENT_SEND_PKG, action_led_off, 0);
+    sys_task_reg_alarm(60000, config_update_powerCnt, 0);    /* 1min */
+    sys_task_reg_event(EVENT_BMQ_STOP, action_step_stop, 0);
     return 0;
 }
 
@@ -220,7 +261,7 @@ void uart1_rx_cb(uint8_t ch) {
     }
     if(idx >= size+4) {
         if(ch == 0xAA) { /* receive a valid package? */
-            sys_event_trigger(EVENT_UART1_PKGS);
+            sys_event_trigger(EVENT_RECV_PKG);
         }
         idx = 0;
     } else if(idx == size+3) {

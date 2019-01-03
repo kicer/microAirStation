@@ -1,28 +1,19 @@
 #include "stm8s.h"
 #include "sys.h"
-#include "uart.h"
 #include "board.h"
 
 /* Private defines -----------------------------------------------------------*/
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
-static void led_flash(void *p) {
-    GPIO_WriteReverse(GPIOA, GPIO_PIN_3);
-}
 
 void main(void)
 {
     /* Initialization of the clock=16Mhz */
     CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
-
-    /* device init */
-    uart1_init(9600);
-    GPIO_Init(GPIOA, GPIO_PIN_3, GPIO_MODE_OUT_PP_HIGH_FAST);
-
-    /* system handler */
+    /* init */
     sys_init();
     board_init();
-    sys_task_reg_timer(500, led_flash, 0);
+    /* run */
     enableInterrupts();
     sys_run();
 

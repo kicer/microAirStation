@@ -2,13 +2,16 @@
 #define _BOARD_H_
 
 
-#define EVENT_UART1_PKGS   1
-#define EVENT_BMQ_STOP     2
+#define UART_COMM_BAUD     9600
 
 #define TUIGAN_RUN_TIME    5    /* sec */
 #define ACTION_LOCK_TIME   60   /* sec */
 #define BMQ_RUN_CIRCLE     5    /* nx100 */
 #define BMQ_RUN_ANGLE      0    /* 0~100 */
+
+#define EVENT_RECV_PKG     1
+#define EVENT_SEND_PKG     2
+#define EVENT_BMQ_STOP     3
 
 typedef struct {
     uint8_t head;

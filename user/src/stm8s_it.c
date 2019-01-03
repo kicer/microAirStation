@@ -40,7 +40,9 @@
 /* Private variables ---------------------------------------------------------*/
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
+#include "board.h"
 extern void sys_ticks_cb(void);
+extern int sys_event_trigger(int);
 extern int uart1_tx_data(void);
 extern void uart1_rx_cb(uint8_t);
 extern void gpioCExti_cb(uint8_t);
@@ -342,6 +344,7 @@ INTERRUPT_HANDLER(TIM1_CAP_COM_IRQHandler, 12)
         UART1_SendData8((uint8_t)ch);
     } else {
         UART1_ITConfig(UART1_IT_TXE, DISABLE);
+        sys_event_trigger(EVENT_SEND_PKG);
     }
  }
 

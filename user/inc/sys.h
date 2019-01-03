@@ -26,7 +26,7 @@ extern void sys_run(void);
 /* system uptime, unit:1ms */
 extern clock_t sys_uptime(void);
 
-#define TASK_STACK_SIZE  8
+#define TASK_STACK_SIZE  16
 #define EVENT_SYSTICKS   0
 
 
