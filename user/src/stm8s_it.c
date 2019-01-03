@@ -40,9 +40,11 @@
 /* Private variables ---------------------------------------------------------*/
 /* Private function prototypes -----------------------------------------------*/
 /* Private functions ---------------------------------------------------------*/
-extern void _sys_ticks_cb(void);
+extern void sys_ticks_cb(void);
 extern int uart1_tx_data(void);
 extern void uart1_rx_cb(uint8_t);
+extern void gpioCExti_cb(uint8_t);
+extern void gpioDExti_cb(uint8_t);
 /* Public functions ----------------------------------------------------------*/
 
 #ifdef _COSMIC_
@@ -144,6 +146,7 @@ INTERRUPT_HANDLER(EXTI_PORTC_IRQHandler, 5)
   /* In order to detect unexpected events during development,
      it is recommended to set a breakpoint on the following instruction.
   */
+  gpioCExti_cb(GPIO_ReadInputData(GPIOC));
 }
 
 /**
@@ -156,6 +159,7 @@ INTERRUPT_HANDLER(EXTI_PORTD_IRQHandler, 6)
   /* In order to detect unexpected events during development,
      it is recommended to set a breakpoint on the following instruction.
   */
+  gpioDExti_cb(GPIO_ReadInputData(GPIOD));
 }
 
 /**
@@ -492,7 +496,7 @@ INTERRUPT_HANDLER(TIM6_UPD_OVF_TRG_IRQHandler, 23)
   */
  INTERRUPT_HANDLER(TIM4_UPD_OVF_IRQHandler, 23)
  {
-  _sys_ticks_cb();
+  sys_ticks_cb();
   /* Cleat Interrupt Pending bit */
   TIM4_ClearITPendingBit(TIM4_IT_UPDATE);
  }

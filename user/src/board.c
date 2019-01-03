@@ -5,73 +5,184 @@
 #include "board.h"
 
 uint8_t Rx1Buffer[UART_RX_MAXSIZE];
+DevState gDevSt;
+__IO uint8_t actionState = 0;
 
-static void config_make_checksum(DevState *pst) {
-    pst->chksum = 0;
+static uint8_t config_make_checksum(void *pkg, int size) {
     uint8_t chksum = 0;
-    for(int i=0; i<sizeof(DevState); i++) {
-        chksum += *((uint8_t*)pst+i);
+    uint8_t *pst = (uint8_t *)pkg;
+    pst[size-2] = 0;
+    for(int i=0; i<size; i++) {
+        chksum += *(pst+i);
     }
-    pst->chksum = 0xFF-chksum;
+    return (0xFF-chksum);
 }
 
 static void config_read_state(DevState *pst) {
-    if(eeprom_read_config(pst) != sizeof(DevState)) {
+    int size = eeprom_read_config(pst);
+    uint8_t chksum = pst->chksum;
+    if(
+        (size != sizeof(DevState)) ||
+        (pst->len != 8) ||
+        (chksum!=config_make_checksum(pst, sizeof(DevState)))
+    ){
         pst->head = 0x55;
         pst->cmd = 0x01;
-        pst->len = 4;
+        pst->len = 8;
         pst->powerCnt = 0;
         pst->actionCnt = 0;
         pst->clearCnt = 0;
+        pst->tuiganRunTime = TUIGAN_RUN_TIME;
+        pst->actionLockTime = ACTION_LOCK_TIME;
+        pst->bmqRunCircle = BMQ_RUN_CIRCLE;
+        pst->bmqRunAngle = BMQ_RUN_ANGLE;
         pst->tail = 0xAA;
-        config_make_checksum(pst);
+        pst->chksum = config_make_checksum(&pst, sizeof(DevState));
     }
 }
 
 static void config_update_powerCnt(void *p) {
-    DevState st;
-    config_read_state(&st);
-    st.powerCnt += 1;
-    config_make_checksum(&st);
-    eeprom_write_config(&st, sizeof(st));
+    gDevSt.powerCnt += 1;
+    gDevSt.chksum = config_make_checksum(&gDevSt, sizeof(DevState));
+    eeprom_write_config(&gDevSt, sizeof(DevState));
 }
 
 static void config_update_actionCnt(void *p) {
-    DevState st;
-    config_read_state(&st);
-    st.actionCnt += 1;
-    config_make_checksum(&st);
-    eeprom_write_config(&st, sizeof(st));
+    gDevSt.actionCnt += 1;
+    gDevSt.chksum = config_make_checksum(&gDevSt, sizeof(DevState));
+    eeprom_write_config(&gDevSt, sizeof(DevState));
 }
 
 static void config_update_clearCnt(void *p) {
-    DevState st;
-    config_read_state(&st);
-    st.clearCnt += 1;
-    config_make_checksum(&st);
-    eeprom_write_config(&st, sizeof(st));
+    gDevSt.clearCnt += 1;
+    gDevSt.chksum = config_make_checksum(&gDevSt, sizeof(DevState));
+    eeprom_write_config(&gDevSt, sizeof(DevState));
+}
+
+__IO uint32_t bmqCh1,bmqCh2,bmqCh3,bmqCh4;
+__IO uint32_t bmqMaxCount=0;
+
+static void bmq_data_clear(void) {
+    bmqCh1 = bmqCh2 = bmqCh3 = bmqCh4 = 0;
+}
+
+static void action_step_reinit(void *p) {
+    actionState = 0;
+}
+
+static void action_step_finish(void *p) {
+    actionState = 4;
+    /* stop tuigan */
+    GPIO_WriteLow(GPIOC, GPIO_PIN_3);
+    GPIO_WriteLow(GPIOC, GPIO_PIN_4);
+    /* update state */
+    config_update_actionCnt(0);
+    /* reinit after xxs */
+    sys_task_reg_alarm((clock_t)gDevSt.actionLockTime*1000, action_step_reinit, 0);
+    actionState = 5;
+}
+
+static void action_step_stop(void *p) {
+    actionState = 3;
+    /* stop motor */
+    GPIO_WriteLow(GPIOB, GPIO_PIN_4);
+    GPIO_WriteLow(GPIOD, GPIO_PIN_3);
+    /* down tuigan */
+    GPIO_WriteLow(GPIOC, GPIO_PIN_3);
+    GPIO_WriteHigh(GPIOC, GPIO_PIN_4);
+    sys_task_reg_alarm((clock_t)gDevSt.tuiganRunTime*1000, action_step_finish, 0);
+}
+
+static void action_step_move(void *p) {
+    actionState = 2;
+    /* stop tuigan */
+    GPIO_WriteLow(GPIOC, GPIO_PIN_4);
+    GPIO_WriteLow(GPIOC, GPIO_PIN_3);
+    /* bmq round-length */
+    bmq_data_clear();
+    bmqMaxCount = gDevSt.bmqRunCircle*100+gDevSt.bmqRunAngle;
+    /* start motor */
+    GPIO_WriteLow(GPIOB, GPIO_PIN_4);
+    GPIO_WriteHigh(GPIOD, GPIO_PIN_3);
+}
+
+static void action_step_up(void *p) {
+    actionState = 1;
+    /* up tuigan */
+    GPIO_WriteLow(GPIOC, GPIO_PIN_4);
+    GPIO_WriteHigh(GPIOC, GPIO_PIN_3);
+    sys_task_reg_alarm((clock_t)gDevSt.tuiganRunTime*1000, action_step_move, 0);
 }
 
 static void uart_pkgs_cb(void *p) {
     int cmd = *((uint8_t *)p+1);
     if(cmd == 0x01) { /* readState */
-        DevState st;
-        config_read_state(&st);
+        uart1_flush_output(); /* force output */
+        uart1_send((uint8_t *)&gDevSt, sizeof(gDevSt));
+    } else if(cmd == 0x02) { /* filterUpdate */
+        if(actionState == 0) {
+            /* up > move > check > stop > down */
+            action_step_up(0);
+        }
+        /* ack state */
+        ActionState st= {0x55,0x02,2,0,0,0xAA};
+        st.step = actionState;
+        st.chksum = config_make_checksum(&st, sizeof(ActionState));
         uart1_flush_output(); /* force output */
         uart1_send((uint8_t *)&st, sizeof(st));
-    } else if(cmd == 0x02) { /* filterUpdate */
-        /* 1. up */
-        /* 2. move */
-        /* 3. check */
-        /* 4. stop */
-        /* 5. down */
     }
 }
 
 int board_init(void) {
+    /* 4ch motor output */
+    GPIO_Init(GPIOD, GPIO_PIN_3, GPIO_MODE_OUT_PP_LOW_FAST);
+    GPIO_Init(GPIOB, GPIO_PIN_4, GPIO_MODE_OUT_OD_LOW_FAST);
+    GPIO_Init(GPIOC, GPIO_PIN_3, GPIO_MODE_OUT_PP_LOW_FAST);
+    GPIO_Init(GPIOC, GPIO_PIN_4, GPIO_MODE_OUT_PP_LOW_FAST);
+    /* 3ch bmq input */
+    GPIO_Init(GPIOC, GPIO_PIN_6, GPIO_MODE_IN_PU_IT);
+    GPIO_Init(GPIOC, GPIO_PIN_7, GPIO_MODE_IN_PU_IT);
+    GPIO_Init(GPIOD, GPIO_PIN_2, GPIO_MODE_IN_PU_IT);
+    EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOD, EXTI_SENSITIVITY_FALL_ONLY);
+    EXTI_SetExtIntSensitivity(EXTI_PORT_GPIOC, EXTI_SENSITIVITY_FALL_ONLY);
+    /* register event */
     sys_task_reg_event(EVENT_UART1_PKGS, uart_pkgs_cb, Rx1Buffer);
     sys_task_reg_alarm(60000, config_update_powerCnt, 0);
+    sys_task_reg_event(EVENT_BMQ_STOP, action_step_stop, 0);
+    /* read config */
+    eeprom_init();
+    config_read_state(&gDevSt);
     return 0;
+}
+
+
+void gpioCExti_cb(uint8_t val) {
+    uint32_t cnt = bmqMaxCount;
+    if((val&GPIO_PIN_6)==0x00) {
+        bmqCh1 += 1;
+        if((cnt>0)&&(bmqCh1 >= cnt)) {
+            bmqMaxCount = 0;
+            sys_event_trigger(EVENT_BMQ_STOP);
+        }
+    }
+    if((val&GPIO_PIN_7)==0x00) {
+        bmqCh2 += 1;
+        if((cnt>0)&&(bmqCh2 >= cnt)) {
+            bmqMaxCount = 0;
+            sys_event_trigger(EVENT_BMQ_STOP);
+        }
+    }
+}
+
+void gpioDExti_cb(uint8_t val) {
+    uint32_t cnt = bmqMaxCount;
+    if((val&GPIO_PIN_2)==0x00) {
+        bmqCh3 += 1;
+        if((cnt>0)&&(bmqCh3 >= cnt)) {
+            bmqMaxCount = 0;
+            sys_event_trigger(EVENT_BMQ_STOP);
+        }
+    }
 }
 
 void uart1_rx_cb(uint8_t ch) {

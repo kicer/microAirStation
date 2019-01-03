@@ -1,7 +1,6 @@
 #include "stm8s.h"
 #include "sys.h"
 #include "uart.h"
-#include "eeprom.h"
 #include "board.h"
 
 /* Private defines -----------------------------------------------------------*/
@@ -17,7 +16,6 @@ void main(void)
     CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
 
     /* device init */
-    eeprom_init();
     uart1_init(9600);
     GPIO_Init(GPIOA, GPIO_PIN_3, GPIO_MODE_OUT_PP_HIGH_FAST);
 

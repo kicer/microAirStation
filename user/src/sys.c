@@ -110,7 +110,7 @@ clock_t sys_uptime(void) {
 
 
 /* === helper functions === */
-void _sys_ticks_cb(void) {
+void sys_ticks_cb(void) {
     _sys_ticks += 1;
     sys_event_trigger(EVENT_SYSTICKS);
 }
