@@ -10,7 +10,6 @@ typedef enum {
 
 typedef struct {
     Task foo;
-    void *params;
     int type;
     clock_t argv;
     clock_t ticks;
