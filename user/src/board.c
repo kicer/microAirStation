@@ -64,25 +64,6 @@ static void action_led_off(void) {
     LED_OFF();
 }
 
-static void user_key_cb(void) {
-    static uint32_t key_pressed = 0;
-    if(GPIO_ReadInputPin(GPIOC, GPIO_PIN_5)==RESET) {
-        key_pressed += 1;
-        if(key_pressed > 250) { /* >2.5s */
-          LED_ON();
-        }
-    } else {
-        if(key_pressed > 250) { /* >2.5s */
-            LED_ON();
-            gDevSt.actionCnt = 0;
-            gDevSt.clearCnt += 1;
-            config_update_config();
-            sys_task_reg_alarm(5000, action_led_off);
-        }
-        key_pressed = 0;
-    }
-}
-
 __IO uint32_t bmqCh1,bmqCh2,bmqCh3,bmqCh4;
 __IO uint32_t bmqMaxCount=0;
 
@@ -91,19 +72,28 @@ static void bmq_data_clear(void) {
 }
 
 static void action_step_reinit(void) {
+    LED_OFF();
     actionState = 0;
 }
 
 static void action_step_finish(void) {
-    actionState = 4;
+    actionState = 5;
     /* stop tuigan */
-    GPIO_WriteLow(GPIOC, GPIO_PIN_3);
     GPIO_WriteLow(GPIOC, GPIO_PIN_4);
+    GPIO_WriteLow(GPIOC, GPIO_PIN_3);
     /* update state */
     config_update_actionCnt();
     /* reinit after xxs */
     sys_task_reg_alarm((clock_t)gDevSt.actionLockTime*1000, action_step_reinit);
-    actionState = 5;
+    LED_ON();
+}
+
+static void action_step_down(void) {
+    actionState = 4;
+    /* down tuigan */
+    GPIO_WriteLow(GPIOC, GPIO_PIN_4);
+    GPIO_WriteHigh(GPIOC, GPIO_PIN_3);
+    sys_task_reg_alarm((clock_t)gDevSt.tuiganRunTime*1000, action_step_finish);
 }
 
 static void action_step_stop(void) {
@@ -111,10 +101,7 @@ static void action_step_stop(void) {
     /* stop motor */
     GPIO_WriteLow(GPIOB, GPIO_PIN_4);
     GPIO_WriteLow(GPIOD, GPIO_PIN_3);
-    /* down tuigan */
-    GPIO_WriteLow(GPIOC, GPIO_PIN_3);
-    GPIO_WriteHigh(GPIOC, GPIO_PIN_4);
-    sys_task_reg_alarm((clock_t)gDevSt.tuiganRunTime*1000, action_step_finish);
+    sys_task_reg_alarm((clock_t)2000, action_step_down);
 }
 
 static void action_step_move(void) {
@@ -133,8 +120,8 @@ static void action_step_move(void) {
 static void action_step_up(void) {
     actionState = 1;
     /* up tuigan */
-    GPIO_WriteLow(GPIOC, GPIO_PIN_4);
-    GPIO_WriteHigh(GPIOC, GPIO_PIN_3);
+    GPIO_WriteLow(GPIOC, GPIO_PIN_3);
+    GPIO_WriteHigh(GPIOC, GPIO_PIN_4);
     sys_task_reg_alarm((clock_t)gDevSt.tuiganRunTime*1000, action_step_move);
 }
 
@@ -167,6 +154,40 @@ static void uart_recv_pkg_cb(void) {
     }
 }
 
+static void user_key_cb(void) {
+    static int tuigan_action = 0;
+    static uint32_t key_pressed = 0;
+    if(GPIO_ReadInputPin(GPIOC, GPIO_PIN_5)==RESET) {
+        key_pressed += 1;
+        if(key_pressed > 200) { /* >2s */
+            LED_ON();
+            if(tuigan_action) {
+                /* up tuigan */
+                GPIO_WriteLow(GPIOC, GPIO_PIN_3);
+                GPIO_WriteHigh(GPIOC, GPIO_PIN_4);
+            } else {
+                /* down tuigan */
+                GPIO_WriteLow(GPIOC, GPIO_PIN_4);
+                GPIO_WriteHigh(GPIOC, GPIO_PIN_3);
+            }
+        }
+    } else {
+        if(key_pressed > 200) { /* >2.0s */
+            LED_OFF();
+            if(gDevSt.actionCnt != 0) {
+                gDevSt.actionCnt = 0;
+                gDevSt.clearCnt += 1;
+                config_update_config();
+            }
+            /* stop tuigan */
+            GPIO_WriteLow(GPIOC, GPIO_PIN_4);
+            GPIO_WriteLow(GPIOC, GPIO_PIN_3);
+            tuigan_action = !tuigan_action;
+        }
+        key_pressed = 0;
+    }
+}
+
 int board_init(void) {
     uart1_init(UART_COMM_BAUD);
     /* indicate led */
@@ -193,6 +214,12 @@ int board_init(void) {
     sys_task_reg_event(EVENT_SEND_PKG, action_led_off);
     sys_task_reg_alarm(60000, config_update_powerCnt);    /* 1min */
     sys_task_reg_event(EVENT_BMQ_STOP, action_step_stop);
+    for(int i=0; i<10; i++) {
+      LED_ON();
+      for(int j=0; j<100; j++) for(int k=0; k<10000; k++) {nop();}
+      LED_OFF();
+      for(int j=0; j<100; j++) for(int k=0; k<10000; k++) {nop();}
+    };
     return 0;
 }
 
