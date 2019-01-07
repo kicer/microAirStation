@@ -37,7 +37,7 @@ static void config_read_state(DevState *pst) {
         pst->actionCnt = 0;
         pst->devState = 0;
         pst->tuiganRunTime = TUIGAN_RUN_TIME;
-        pst->actionLockTime = ACTION_LOCK_TIME;
+        pst->actionLockCount = ACTION_LOCK_COUNT;
         pst->bmqRunCircle = BMQ_RUN_CIRCLE;
         pst->bmqRunAngle = BMQ_RUN_ANGLE;
         pst->tail = 0xAA;
@@ -72,11 +72,6 @@ static void bmq_data_clear(void) {
     bmqCh1 = bmqCh2 = bmqCh3 = bmqCh4 = 0;
 }
 
-static void action_step_reinit(void) {
-    LED_OFF();
-    actionState = 0;
-}
-
 static void action_step_finish(void) {
     actionState = 5;
     /* stop tuigan */
@@ -85,8 +80,7 @@ static void action_step_finish(void) {
     /* update state */
     config_update_actionCnt();
     /* reinit after xxs */
-    sys_task_reg_alarm((clock_t)gDevSt.actionLockTime*1000, action_step_reinit);
-    LED_ON();
+    actionState = 0;
 }
 
 static void action_step_down(void) {
@@ -132,7 +126,7 @@ static void uart_recv_pkg_cb(void) {
     if(cmd == 0x01) { /* readState */
         if(size == 5) {
             gDevSt.tuiganRunTime = Rx1Buffer[3];
-            gDevSt.actionLockTime = Rx1Buffer[4];
+            gDevSt.actionLockCount = Rx1Buffer[4];
             gDevSt.bmqRunCircle = Rx1Buffer[5];
             gDevSt.bmqRunAngle = Rx1Buffer[6];
             sys_task_reg_alarm(1000, config_update_config);
@@ -146,8 +140,10 @@ static void uart_recv_pkg_cb(void) {
         LED_ON();
     } else if(cmd == 0x02) { /* filterUpdate */
         if(actionState == 0) {
-            /* up > move > check > stop > down */
-            action_step_up();
+            if(gDevSt.actionCnt < gDevSt.actionLockCount) {
+                /* up > move > check > stop > down */
+                action_step_up();
+            }
         }
         /* ack state */
         ActionState st= {0x55,0x02,2,0,0,0xAA};

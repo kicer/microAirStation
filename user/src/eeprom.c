@@ -45,7 +45,7 @@ typedef struct {
     uint8_t chksum;
 } EECFG;
 
-#define MAGIC_CODE   0x2B
+#define MAGIC_CODE   0x3B
 #define UID32(p)     (*((uint32_t *)(p)))
 
 int eBlockId = -1;

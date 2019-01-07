@@ -5,7 +5,7 @@
 #define UART_COMM_BAUD     9600
 
 #define TUIGAN_RUN_TIME    4    /* sec */
-#define ACTION_LOCK_TIME   30   /* sec */
+#define ACTION_LOCK_COUNT  10   /* max count */
 #define BMQ_RUN_CIRCLE     6    /* nx100 */
 #define BMQ_RUN_ANGLE      30   /* 0~100 */
 
@@ -22,7 +22,7 @@ typedef struct {
     uint8_t devState;  /* manual init filter */
     /* === config === */
     uint8_t tuiganRunTime;
-    uint8_t actionLockTime;
+    uint8_t actionLockCount;
     uint8_t bmqRunCircle;
     uint8_t bmqRunAngle;
     /* === config === */
