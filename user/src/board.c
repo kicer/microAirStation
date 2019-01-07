@@ -35,7 +35,7 @@ static void config_read_state(DevState *pst) {
         pst->len = 8;
         pst->powerCnt = 0;
         pst->actionCnt = 0;
-        pst->clearCnt = 0;
+        pst->devState = 0;
         pst->tuiganRunTime = TUIGAN_RUN_TIME;
         pst->actionLockTime = ACTION_LOCK_TIME;
         pst->bmqRunCircle = BMQ_RUN_CIRCLE;
@@ -46,6 +46,7 @@ static void config_read_state(DevState *pst) {
 }
 
 static void config_update_config(void) {
+    gDevSt.devState = actionState;
     gDevSt.chksum = config_make_checksum(&gDevSt, sizeof(DevState));
     eeprom_write_config(&gDevSt, sizeof(DevState));
 }
@@ -136,6 +137,10 @@ static void uart_recv_pkg_cb(void) {
             gDevSt.bmqRunAngle = Rx1Buffer[6];
             sys_task_reg_alarm(1000, config_update_config);
         }
+        if(gDevSt.devState != actionState) {
+            gDevSt.devState = actionState;
+            gDevSt.chksum = config_make_checksum(&gDevSt, sizeof(DevState));
+        }
         uart1_flush_output(); /* force output */
         uart1_send((uint8_t *)&gDevSt, sizeof(gDevSt));
         LED_ON();
@@ -176,7 +181,6 @@ static void user_key_cb(void) {
             LED_OFF();
             if(gDevSt.actionCnt != 0) {
                 gDevSt.actionCnt = 0;
-                gDevSt.clearCnt += 1;
                 config_update_config();
             }
             /* stop tuigan */

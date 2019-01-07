@@ -19,7 +19,7 @@ typedef struct {
     uint8_t len;
     uint8_t powerCnt;  /* power on */
     uint8_t actionCnt; /* action */
-    uint8_t clearCnt;  /* manual init filter */
+    uint8_t devState;  /* manual init filter */
     /* === config === */
     uint8_t tuiganRunTime;
     uint8_t actionLockTime;
