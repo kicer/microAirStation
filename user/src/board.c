@@ -73,7 +73,7 @@ static void bmq_data_clear(void) {
 }
 
 static void action_step_finish(void) {
-    actionState = 5;
+    actionState = 6;
     /* stop tuigan */
     GPIO_WriteLow(GPIOC, GPIO_PIN_4);
     GPIO_WriteLow(GPIOC, GPIO_PIN_3);
@@ -84,7 +84,7 @@ static void action_step_finish(void) {
 }
 
 static void action_step_down(void) {
-    actionState = 4;
+    actionState = 5;
     /* down tuigan */
     GPIO_WriteLow(GPIOC, GPIO_PIN_4);
     GPIO_WriteHigh(GPIOC, GPIO_PIN_3);
@@ -92,7 +92,7 @@ static void action_step_down(void) {
 }
 
 static void action_step_stop(void) {
-    actionState = 3;
+    actionState = 4;
     /* stop motor */
     GPIO_WriteLow(GPIOB, GPIO_PIN_4);
     GPIO_WriteLow(GPIOD, GPIO_PIN_3);
@@ -100,7 +100,7 @@ static void action_step_stop(void) {
 }
 
 static void action_step_move(void) {
-    actionState = 2;
+    actionState = 3;
     /* stop tuigan */
     GPIO_WriteLow(GPIOC, GPIO_PIN_4);
     GPIO_WriteLow(GPIOC, GPIO_PIN_3);
@@ -113,11 +113,16 @@ static void action_step_move(void) {
 }
 
 static void action_step_up(void) {
-    actionState = 1;
+    actionState = 2;
     /* up tuigan */
     GPIO_WriteLow(GPIOC, GPIO_PIN_3);
     GPIO_WriteHigh(GPIOC, GPIO_PIN_4);
     sys_task_reg_alarm((clock_t)gDevSt.tuiganRunTime*1000, action_step_move);
+}
+
+static void action_step_start(void) {
+    actionState = 1;
+    sys_task_reg_alarm((clock_t)1500, action_step_up);
 }
 
 static void uart_recv_pkg_cb(void) {
@@ -142,7 +147,7 @@ static void uart_recv_pkg_cb(void) {
         if(actionState == 0) {
             if(gDevSt.actionCnt < gDevSt.actionLockCount) {
                 /* up > move > check > stop > down */
-                action_step_up();
+                action_step_start();
             }
         }
         /* ack state */
